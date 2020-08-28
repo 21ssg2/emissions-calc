@@ -53,6 +53,16 @@ function csv_to_array($filename='', $delimiter=',')
     return $data;
 }
 
+function array_write_csv($arr,$file)
+{
+    foreach ($arr as $key => $value) {
+      $key = str_replace(',', ';', $key);
+      $outputDept = $key . ", " . $value .  "\n";
+      fwrite($file, $outputDept);
+    }
+    return True;
+}
+
 /**
  *
  * Airport data from http://ourairports.com/data/
@@ -61,6 +71,8 @@ function csv_to_array($filename='', $delimiter=',')
 **/
 
 $mileageOutput = fopen("output/mileage.csv", "w") or die("Unable to open mileage file!");
+$deptFlightOutput = fopen("output/deptFlight.csv", "w") or die("Unable to open mileage file!");
+$deptTrainOutput = fopen("output/deptTrain.csv", "w") or die("Unable to open mileage file!");
 $errorOutput = fopen("output/unprocessed.csv", "w") or die("Unable to open error file!");
 $travels = fopen('input/travel.csv', 'r');
 $airports = csv_to_array('airports.csv');
@@ -73,6 +85,8 @@ $totalAir = 0.0;
 $totalTrain = 0.0;
 $lineNum = 0;
 $errorLines = 0;
+$deptFlight = array();
+$deptTrain = array();
 
 // Process each line of the provided file
 while (($line = fgetcsv($travels)) !== FALSE) {
@@ -92,6 +106,8 @@ while (($line = fgetcsv($travels)) !== FALSE) {
         $dept = array_search('Dept', $line);
         $id = array_search('ID', $line);
         $merchant = array_search('Merchant', $line);
+        $name = array_search('Passenger Name', $line);
+        $date = array_search('Trans Date', $line);
         //$org = array_search('ORIGINCITY', $line);
         //$dest = array_search('DESTINATION', $line);
 
@@ -99,10 +115,13 @@ while (($line = fgetcsv($travels)) !== FALSE) {
         $lineNum = 1;
 
         // Set up the headers in the output and error files
-        $outputHeader = "Dept,Trip Id,Mileage\n";
+        $outputHeader = "Dept,Merchant,Name,Date,Trip Id,From,To,Mileage\n";
         fwrite($mileageOutput, $outputHeader);
         $errorHeader = "line,id,origin,destination\n";
         fwrite($errorOutput, $errorHeader);
+        $deptHeader = "Dept,Total,\n";
+        fwrite($deptFlightOutput, $deptHeader);
+        fwrite($deptTrainOutput, $deptHeader);
 
     } else {
 
@@ -133,14 +152,18 @@ while (($line = fgetcsv($travels)) !== FALSE) {
                 $tripMileage = getDistanceBetweenPoints($fromLat, $fromLon, $toLat, $toLon);
 
                 //Write the record
-                $outputTrip = $line[$dept] . ", " . $line[$id] . ", " . $line[$from] . ", " . $line[$to] . ", " .$tripMileage . "\n";
+                $outputTrip = $line[$dept] . ", " . $line[$merchant] . ", " . $line[$name] . ", " .
+                              $line[$date] . ", " . $line[$id] . ", " . $line[$from] . ", " . $line[$to] . ", " .
+                              $tripMileage . "\n";
                 fwrite($mileageOutput, $outputTrip);
 
                 // Update the total mileage
                 if ($mileageSource == $amtrak){
                   $totalTrain = $totalTrain + $tripMileage;
+                  $deptTrain[$line[$dept]] += $tripMileage;
                 } else {
                   $totalAir = $totalAir + $tripMileage;
+                  $deptFlight[$line[$dept]] += $tripMileage;
                 }
             }
         }
@@ -173,8 +196,12 @@ if ($errorLines > 0) {
 
 echo $outputTotal;
 fwrite($mileageOutput, $outputTotal);
+$_ = array_write_csv($deptTrain, $deptTrainOutput);
+$_ = array_write_csv($deptFlight, $deptFlightOutput);
 
 // Close all the files
 fclose($travels);
 fclose($mileageOutput);
 fclose($errorOutput);
+fclose($deptTrainOutput);
+fclose($deptFlightOutput);
